@@ -28,8 +28,8 @@ import qualified RPS.GameChoice as GameChoice
 data GameRedeemer =
         Player2Play GameChoice.GameChoice
       | Player2NoRevealClaim
-      | Player1RevealWin ByteString
-      | Player1RevealDraw ByteString
+      | Player1RevealWin ByteString GameChoice.GameChoice
+      | Player1RevealDraw ByteString GameChoice.GameChoice
       | Player1NoPlayClaim
     deriving Prelude.Show
 

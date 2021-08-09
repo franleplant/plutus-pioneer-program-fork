@@ -24,6 +24,8 @@ import           Playground.Contract          (ToSchema)
 data GameChoice = Rock | Paper | Scissors
     deriving (Prelude.Show, Generic, FromJSON, ToJSON, ToSchema, Prelude.Eq)
 
+PlutusTx.unstableMakeIsData ''GameChoice
+
 instance Eq GameChoice where
     {-# INLINABLE (==) #-}
     Rock == Rock = True
@@ -41,4 +43,8 @@ instance Ord GameChoice where
     --compare Scissors Rock = LT
     ----compare :: a -> a -> Ordering
 
-PlutusTx.unstableMakeIsData ''GameChoice
+beats :: GameChoice -> GameChoice -> Bool
+beats Paper Rock = True
+beats Rock Scissors = True
+beats Scissors Paper = True
+beats _ _ = False
