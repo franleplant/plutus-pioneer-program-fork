@@ -21,6 +21,11 @@ import           GHC.Generics                 (Generic)
 import           Playground.Contract          (ToSchema)
 --import Data.Ord
 
+bsRock, bsPaper, bsScissors :: ByteString
+bsRock = "rock"
+bsPaper  = "paper"
+bsScissors  = "scissors"
+
 data GameChoice = Rock | Paper | Scissors
     deriving (Prelude.Show, Generic, FromJSON, ToJSON, ToSchema, Prelude.Eq)
 
@@ -39,12 +44,17 @@ instance Ord GameChoice where
     (<=) Paper Scissors = True
     (<=) Scissors Rock = True
     (<=) _ _ = False
-    --compare Paper Scissors = LT
-    --compare Scissors Rock = LT
-    ----compare :: a -> a -> Ordering
 
 beats :: GameChoice -> GameChoice -> Bool
 beats Paper Rock = True
 beats Rock Scissors = True
 beats Scissors Paper = True
 beats _ _ = False
+
+
+toByteString :: GameChoice -> ByteString
+toByteString choice = case choice of
+    Rock     -> bsRock
+    Paper    -> bsPaper
+    Scissors -> bsScissors
+

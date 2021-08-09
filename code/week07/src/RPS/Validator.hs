@@ -38,10 +38,6 @@ import qualified RPS.GameChoice               as GameChoice
 import qualified RPS.GameDatum                as GameDatum
 import qualified RPS.GameRedeemer             as GameRedeemer
 
-cRock, cPaper, cScissors :: ByteString
-cRock = "rock"
-cPaper  = "paper"
-cScissors  = "scissors"
 
 {-# INLINABLE lovelaces #-}
 lovelaces :: Value -> Integer
@@ -62,30 +58,31 @@ transition :: Game.Game
 
 transition game state redeemer = case (redeemer, stateData state, stateValue state ) of
     (GameRedeemer.Player1NoPlayClaim, GameDatum.GameDatum _ Nothing, staked)
-      | lovelaces staked == Game.stake game       -> let constraints = Constraints.mustBeSignedBy (Game.firstPlayer game) <>
+      | lovelaces staked == Game.stake game       -> let constraints = Constraints.mustBeSignedBy (Game.player1 game) <>
                                                                        Constraints.mustValidateIn (from $ 1 + Game.playDeadline game)
                                                      in Just (constraints, State GameDatum.Finished mempty)
 
     (GameRedeemer.Player2Play choice, GameDatum.GameDatum bytes Nothing, staked)
-      | lovelaces staked == Game.stake game       -> let constraints = Constraints.mustBeSignedBy (Game.secondPlayer game) <>
+      | lovelaces staked == Game.stake game       -> let constraints = Constraints.mustBeSignedBy (Game.player2 game) <>
                                                                        Constraints.mustValidateIn (to $ Game.playDeadline game)
                                                          datum       = GameDatum.GameDatum bytes $ Just choice
                                                          stake       = (lovelaceValueOf $ 2 * Game.stake game)
                                                      in Just (constraints , State datum stake)
 
     (GameRedeemer.Player1RevealWin _ _, GameDatum.GameDatum _ (Just _), staked)
-      | lovelaces staked == (2 * Game.stake game) -> let constraints = Constraints.mustBeSignedBy (Game.firstPlayer game) <>
+      | lovelaces staked == (2 * Game.stake game) -> let constraints = Constraints.mustBeSignedBy (Game.player1 game) <>
                                                                        Constraints.mustValidateIn (to $ Game.revealDeadline game)
                                                      in Just (constraints, State GameDatum.Finished mempty)
 
     (GameRedeemer.Player2NoRevealClaim, GameDatum.GameDatum _ (Just _), staked)
-      | lovelaces staked == (2 * Game.stake game) -> let constraints = Constraints.mustBeSignedBy (Game.secondPlayer game)  <>
+      | lovelaces staked == (2 * Game.stake game) -> let constraints = Constraints.mustBeSignedBy (Game.player2 game)  <>
                                                                        Constraints.mustValidateIn (from $ 1 + Game.revealDeadline game)
 
                                                      in  Just ( constraints , State GameDatum.Finished mempty)
 
+    -- TODO add a constraint that the stake is returned to both players
     (GameRedeemer.Player1RevealDraw _ _, GameDatum.GameDatum _ (Just _), staked)
-      | lovelaces staked == (2 * Game.stake game) -> let constraints =  Constraints.mustBeSignedBy (Game.firstPlayer game)  <>
+      | lovelaces staked == (2 * Game.stake game) -> let constraints =  Constraints.mustBeSignedBy (Game.player1 game)  <>
                                                                         Constraints.mustValidateIn (to $ Game.revealDeadline game)
 
                                                      in  Just ( constraints , State GameDatum.Finished mempty)
@@ -150,15 +147,15 @@ type Gaming = StateMachine GameDatum.GameDatum GameRedeemer.GameRedeemer
 
 
 gameStateMachine' :: Game.Game -> StateMachine GameDatum.GameDatum GameRedeemer.GameRedeemer
-gameStateMachine' game = gameStateMachine game cRock cPaper cScissors
+gameStateMachine' game = gameStateMachine game GameChoice.bsRock GameChoice.bsPaper GameChoice.bsScissors
 
 typedGameValidator :: Game.Game -> Scripts.TypedValidator Gaming
 typedGameValidator game = Scripts.mkTypedValidator @Gaming
     ($$(PlutusTx.compile [|| mkGameValidator ||])
         `PlutusTx.applyCode` PlutusTx.liftCode game
-        `PlutusTx.applyCode` PlutusTx.liftCode cRock
-        `PlutusTx.applyCode` PlutusTx.liftCode cPaper
-        `PlutusTx.applyCode` PlutusTx.liftCode cScissors)
+        `PlutusTx.applyCode` PlutusTx.liftCode GameChoice.bsRock
+        `PlutusTx.applyCode` PlutusTx.liftCode GameChoice.bsPaper
+        `PlutusTx.applyCode` PlutusTx.liftCode GameChoice.bsScissors)
     $$(PlutusTx.compile [|| wrap ||])
   where
     wrap = Scripts.wrapValidator @GameDatum.GameDatum @GameRedeemer.GameRedeemer

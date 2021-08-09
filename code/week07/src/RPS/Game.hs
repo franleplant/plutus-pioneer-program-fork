@@ -22,8 +22,8 @@ import           Data.Aeson                   (FromJSON, ToJSON)
 import           GHC.Generics                 (Generic)
 
 data Game = Game
-    { firstPlayer          :: !PubKeyHash
-    , secondPlayer         :: !PubKeyHash
+    { player1              :: !PubKeyHash
+    , player2              :: !PubKeyHash
     , stake                :: !Integer
     , playDeadline         :: !POSIXTime
     , revealDeadline       :: !POSIXTime
