@@ -14,6 +14,13 @@ library
                      , Week07.StateMachine
                      , Week07.Test
                      , Week07.TestStateMachine
+                     , RPS
+                     , RPS.Game
+                     , RPS.GameChoice
+                     , RPS.GameDatum
+                     , RPS.GameRedeemer
+                     , RPS.Validator
+
   build-depends:       aeson
                      , base ^>=4.14.1.0
                      , containers
