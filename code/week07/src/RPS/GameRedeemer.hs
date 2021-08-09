@@ -25,7 +25,12 @@ import qualified PlutusTx
 
 import qualified RPS.GameChoice as GameChoice
 
-data GameRedeemer = SecondPlayerPlay GameChoice.GameChoice | FirstPlayerReveal ByteString | FirstPlayerClaim | SecondPlayerClaim | Draw
+data GameRedeemer =
+        Player2Play GameChoice.GameChoice
+      | Player2NoRevealClaim
+      | Player1RevealWin ByteString
+      | Player1RevealDraw ByteString
+      | Player1NoPlayClaim
     deriving Prelude.Show
 
 PlutusTx.unstableMakeIsData ''GameRedeemer
