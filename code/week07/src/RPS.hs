@@ -75,32 +75,32 @@ firstGame params = do
         choiceBs   = GameChoice.toByteString choice
         choiceHash = sha2_256 $ nonce `concatenate` choiceBs
     void $ mapError' $ runInitialise client (GameDatum.GameDatum choiceHash Nothing) stake
-    logInfo @String $ "made first move: " ++ show (fpChoice params)
+    logInfo @String $ "first: made first move: " ++ show (fpChoice params)
     tell $ Last $ Just threadToken
 
     waitUntilTimeHasPassed $ fpPlayDeadline params
 
     m <- mapError' $ getOnChainState client
     case m of
-        Nothing             -> throwError "game output not found"
+        Nothing             -> throwError "first: game output not found"
         Just ((o, _), _) -> case tyTxOutData o of
 
             GameDatum.GameDatum _ Nothing -> do
-                logInfo @String "player2 did not play"
+                logInfo @String "first: player2 did not play"
                 void $ mapError' $ runStep client GameRedeemer.Player1NoPlayClaim
-                logInfo @String "player1 reclaimed stake"
+                logInfo @String "first: player1 reclaimed stake"
 
             GameDatum.GameDatum _ (Just player2Choice) | GameChoice.beats choice player2Choice -> do
-                logInfo @String "player2 played and lost"
+                logInfo @String "first: player2 played and lost"
                 void $ mapError' $ runStep client $ GameRedeemer.Player1RevealWin nonce choice
-                logInfo @String "player1 revealed and won"
+                logInfo @String "first: player1 revealed and won"
 
             GameDatum.GameDatum _ (Just player2Choice) | choice == player2Choice -> do
-                logInfo @String "player2 played and it is a draw"
+                logInfo @String "first: player2 played and it is a draw"
                 void $ mapError' $ runStep client $ GameRedeemer.Player1RevealDraw nonce choice
-                logInfo @String "player1 revealed a draw"
+                logInfo @String "first: player1 revealed a draw"
 
-            _ -> logInfo @String "second player played and won"
+            _ -> logInfo @String "first: second player played and won"
 
 data Player2Params = Player2Params
     { spFirst          :: !PubKeyHash
@@ -126,24 +126,24 @@ secondGame params = do
         client = gameClient game
     m <- mapError' $ getOnChainState client
     case m of
-        Nothing          -> logInfo @String "no running game found"
+        Nothing          -> logInfo @String "second: no running game found"
         Just ((o, _), _) -> case tyTxOutData o of
             GameDatum.GameDatum _ Nothing -> do
-                logInfo @String "running game found"
+                logInfo @String "second: running game found"
                 void $ mapError' $ runStep client $ GameRedeemer.Player2Play choice
-                logInfo @String $ "player2 played: " ++ show choice
+                logInfo @String $ "second: player2 played: " ++ show choice
 
                 waitUntilTimeHasPassed $ spRevealDeadline params
 
                 m' <- mapError' $ getOnChainState client
                 case m' of
-                    Nothing -> logInfo @String "first player won"
+                    Nothing -> logInfo @String "second: first player won"
                     Just _  -> do
-                        logInfo @String "player1 didn't reveal"
+                        logInfo @String "second: player1 didn't reveal"
                         void $ mapError' $ runStep client GameRedeemer.Player2NoRevealClaim
-                        logInfo @String "player2 won"
+                        logInfo @String "second: player2 won"
 
-            _ -> throwError "unexpected datum"
+            _ -> throwError "second: unexpected datum"
 
 type GameSchema = Endpoint "first" Player1Params .\/ Endpoint "second" Player2Params
 

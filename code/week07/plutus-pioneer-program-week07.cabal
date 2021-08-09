@@ -15,6 +15,7 @@ library
                      , Week07.Test
                      , Week07.TestStateMachine
                      , RPS
+                     , RPSTest
                      , RPS.Game
                      , RPS.GameChoice
                      , RPS.GameDatum

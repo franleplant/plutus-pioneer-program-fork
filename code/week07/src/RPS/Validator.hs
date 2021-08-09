@@ -13,25 +13,15 @@
 
 module RPS.Validator where
 
-import           Control.Monad                hiding (fmap)
-import           Data.Aeson                   (FromJSON, ToJSON)
-import           Data.Monoid                  (Last (..))
-import           Data.Text                    (Text, pack)
-import           GHC.Generics                 (Generic)
 import           Ledger                       hiding (singleton)
 import           Ledger.Ada                   as Ada
 import           Ledger.Constraints           as Constraints
 import qualified Ledger.Typed.Scripts         as Scripts
-import           Ledger.Typed.Tx
-import           Playground.Contract          (ToSchema)
-import           Plutus.Contract              as Contract
 import           Plutus.Contract.StateMachine
 import qualified PlutusTx
 import           PlutusTx.Prelude             hiding (Semigroup (..), check,
                                                unless)
-import           Prelude                      (Semigroup (..), Show (..),
-                                               String)
-import qualified Prelude
+import           Prelude                      (Semigroup (..))
 
 import qualified RPS.Game                     as Game
 import qualified RPS.GameChoice               as GameChoice
@@ -71,7 +61,8 @@ transition game state redeemer = case (redeemer, stateData state, stateValue sta
 
     (GameRedeemer.Player1RevealWin _ _, GameDatum.GameDatum _ (Just _), staked)
       | lovelaces staked == (2 * Game.stake game) -> let constraints = Constraints.mustBeSignedBy (Game.player1 game) <>
-                                                                       Constraints.mustValidateIn (to $ Game.revealDeadline game)
+                                                                       Constraints.mustValidateIn (to $ Game.revealDeadline game) <>
+                                                                       Constraints.mustPayToPubKey (Game.player1 game) (lovelaceValueOf $ 2 * Game.stake game)
                                                      in Just (constraints, State GameDatum.Finished mempty)
 
     (GameRedeemer.Player2NoRevealClaim, GameDatum.GameDatum _ (Just _), staked)
@@ -80,10 +71,11 @@ transition game state redeemer = case (redeemer, stateData state, stateValue sta
 
                                                      in  Just ( constraints , State GameDatum.Finished mempty)
 
-    -- TODO add a constraint that the stake is returned to both players
     (GameRedeemer.Player1RevealDraw _ _, GameDatum.GameDatum _ (Just _), staked)
       | lovelaces staked == (2 * Game.stake game) -> let constraints =  Constraints.mustBeSignedBy (Game.player1 game)  <>
-                                                                        Constraints.mustValidateIn (to $ Game.revealDeadline game)
+                                                                        Constraints.mustValidateIn (to $ Game.revealDeadline game) <>
+                                                                        Constraints.mustPayToPubKey (Game.player1 game) (lovelaceValueOf $ Game.stake game) <>
+                                                                        Constraints.mustPayToPubKey (Game.player2 game) (lovelaceValueOf $ Game.stake game)
 
                                                      in  Just ( constraints , State GameDatum.Finished mempty)
 
@@ -103,17 +95,21 @@ check :: ByteString
       -> ScriptContext
       -> Bool
 check rock paper scissors (GameDatum.GameDatum player1ChoiceHash (Just player2Choice)) (GameRedeemer.Player1RevealWin nonce player1Choice) _ =
-    player1ChoiceHash == presentedPlayer1ChoiceHash &&
-    GameChoice.beats player1Choice player2Choice
+    traceIfFalse "player1 should reveal the original choice"
+    --traceIfFalse ("player1 should reveal the original choice: " ++ (map charToString player1ChoiceHash) ++ "actual: " ++ presentedPlayer1ChoiceHash)
+        (player1ChoiceHash == presentedPlayer1ChoiceHash) &&
+    traceIfFalse "player1 beats player2" (GameChoice.beats player1Choice player2Choice)
         where
             player1ChoiceString :: ByteString
-            player1ChoiceString = case player2Choice of
+            player1ChoiceString = case player1Choice of
                 GameChoice.Rock     -> rock
                 GameChoice.Paper    -> paper
                 GameChoice.Scissors -> scissors
 
             presentedPlayer1ChoiceHash :: ByteString
-            presentedPlayer1ChoiceHash =  sha2_256 (nonce `concatenate` player1ChoiceString)
+            presentedPlayer1ChoiceHash =  choiceHash
+                where
+                    choiceHash = sha2_256 (nonce `concatenate` player1ChoiceString)
 
 check rock paper scissors (GameDatum.GameDatum player1ChoiceHash (Just player2Choice)) (GameRedeemer.Player1RevealDraw nonce player1Choice) _ =
     player1ChoiceHash == presentedPlayer1ChoiceHash &&
