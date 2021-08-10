@@ -116,7 +116,7 @@ check rock paper scissors (GameDatum.GameDatum player1ChoiceHash (Just player2Ch
     player1Choice == player2Choice
         where
             player1ChoiceString :: ByteString
-            player1ChoiceString = case player2Choice of
+            player1ChoiceString = case player1Choice of
                 GameChoice.Rock     -> rock
                 GameChoice.Paper    -> paper
                 GameChoice.Scissors -> scissors

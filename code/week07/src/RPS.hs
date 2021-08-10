@@ -137,7 +137,7 @@ secondGame params = do
 
                 m' <- mapError' $ getOnChainState client
                 case m' of
-                    Nothing -> logInfo @String "second: first player won"
+                    Nothing -> logInfo @String "second: first player won or draw"
                     Just _  -> do
                         logInfo @String "second: player1 didn't reveal"
                         void $ mapError' $ runStep client GameRedeemer.Player2NoRevealClaim

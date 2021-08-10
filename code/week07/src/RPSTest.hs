@@ -33,11 +33,20 @@ import RPS
 
 test :: IO ()
 test = do
+    -- Player1 wins
     test' GameChoice.Rock GameChoice.Scissors
-    --test' GameChoice.Rock GameChoice.Paper
-    --test' GameChoice.Rock GameChoice.Scissors
-    --test' GameChoice.Rock GameChoice.Scissors
-    --test' GameChoice.Rock GameChoice.Scissors
+    test' GameChoice.Paper GameChoice.Rock
+    test' GameChoice.Scissors GameChoice.Paper
+
+    -- Player2 wins
+    test' GameChoice.Rock GameChoice.Paper
+    test' GameChoice.Paper GameChoice.Scissors
+    test' GameChoice.Scissors GameChoice.Rock
+
+    -- Draw
+    test' GameChoice.Rock GameChoice.Rock
+    test' GameChoice.Paper GameChoice.Paper
+    test' GameChoice.Scissors GameChoice.Scissors
 
 test' :: GameChoice.GameChoice -> GameChoice.GameChoice -> IO ()
 test' c1 c2 = runEmulatorTraceIO $ myTrace c1 c2
