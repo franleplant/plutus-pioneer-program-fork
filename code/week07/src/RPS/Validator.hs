@@ -26,6 +26,7 @@ import           Prelude                      (Semigroup (..))
 import qualified RPS.Game                     as Game
 import qualified RPS.GameChoice               as GameChoice
 import qualified RPS.GameDatum                as GameDatum
+import           RPS.GameDatum                hiding (GameDatum)
 import qualified RPS.GameRedeemer             as GameRedeemer
 
 
@@ -46,45 +47,53 @@ transition :: Game.Game
            -> GameRedeemer.GameRedeemer
            -> Maybe (TxConstraints Void Void, State GameDatum.GameDatum)
 
-transition game state redeemer = case (redeemer, stateData state, stateValue state ) of
-    (GameRedeemer.Player1NoPlayClaim, GameDatum.GameDatum _ Nothing, staked)
+transition game state redeemer = case (stateData state, redeemer, stateValue state ) of
+    (State0 _, GameRedeemer.Player1NoPlayClaim, staked)
       | lovelaces staked == Game.stake game       -> let constraints = Constraints.mustBeSignedBy (Game.player1 game) <>
                                                                        Constraints.mustValidateIn (from $ 1 + Game.playDeadline game)
-                                                     in Just (constraints, State GameDatum.Finished mempty)
+                                                     in Just (constraints, State StateFinal mempty)
 
-    (GameRedeemer.Player2Play choice, GameDatum.GameDatum bytes Nothing, staked)
+    (State0 player1ChoiceHash, GameRedeemer.Player2Play player2Choice, staked)
       | lovelaces staked == Game.stake game       -> let constraints = Constraints.mustBeSignedBy (Game.player2 game) <>
                                                                        Constraints.mustValidateIn (to $ Game.playDeadline game)
-                                                         datum       = GameDatum.GameDatum bytes $ Just choice
+                                                         datum       = State1 player1ChoiceHash player2Choice
                                                          stake       = (lovelaceValueOf $ 2 * Game.stake game)
                                                      in Just (constraints , State datum stake)
 
-    (GameRedeemer.Player1RevealWin _ _, GameDatum.GameDatum _ (Just _), staked)
+    (State1 _ _, GameRedeemer.Player1RevealWin _ _, staked)
       | lovelaces staked == (2 * Game.stake game) -> let constraints = Constraints.mustBeSignedBy (Game.player1 game) <>
                                                                        Constraints.mustValidateIn (to $ Game.revealDeadline game) <>
                                                                        Constraints.mustPayToPubKey (Game.player1 game) (lovelaceValueOf $ 2 * Game.stake game)
-                                                     in Just (constraints, State GameDatum.Finished mempty)
+                                                     in Just (constraints, State StateFinal mempty)
 
-    (GameRedeemer.Player2NoRevealClaim, GameDatum.GameDatum _ (Just _), staked)
+    (State1 _ _, GameRedeemer.Player2NoRevealClaim, staked)
       | lovelaces staked == (2 * Game.stake game) -> let constraints = Constraints.mustBeSignedBy (Game.player2 game)  <>
                                                                        Constraints.mustValidateIn (from $ 1 + Game.revealDeadline game)
 
-                                                     in  Just ( constraints , State GameDatum.Finished mempty)
+                                                     in  Just ( constraints , State StateFinal mempty)
 
-    (GameRedeemer.Player1RevealDraw _ _, GameDatum.GameDatum _ (Just _), staked)
-      | lovelaces staked == (2 * Game.stake game) -> let constraints =  Constraints.mustBeSignedBy (Game.player1 game)  <>
-                                                                        Constraints.mustValidateIn (to $ Game.revealDeadline game) <>
-                                                                        Constraints.mustPayToPubKey (Game.player1 game) (lovelaceValueOf $ Game.stake game) <>
-                                                                        Constraints.mustPayToPubKey (Game.player2 game) (lovelaceValueOf $ Game.stake game)
+    (State1 _ player2Choice, GameRedeemer.Player1RevealDraw _ player1Choice, staked)
+      | lovelaces staked == (2 * Game.stake game) -> let constraints = Constraints.mustBeSignedBy (Game.player1 game)  <>
+                                                                       Constraints.mustValidateIn (to $ Game.revealDeadline game) <>
+                                                                       Constraints.mustPayToPubKey (Game.player1 game) (lovelaceValueOf $ Game.stake game)
+                                                         datum       = State2 player1Choice player2Choice
+                                                         stake       = lovelaceValueOf $ Game.stake game
 
-                                                     in  Just ( constraints , State GameDatum.Finished mempty)
+                                                     in  Just ( constraints , State datum stake)
+
+    (State2 _ _, GameRedeemer.Player2ClaimDraw, staked)
+      | lovelaces staked == Game.stake game       -> let constraints = Constraints.mustBeSignedBy (Game.player2 game)  <>
+                                                                       Constraints.mustValidateIn (from $ 1 + Game.revealDeadline game) <>
+                                                                       Constraints.mustPayToPubKey (Game.player2 game) (lovelaceValueOf $ Game.stake game)
+
+                                                     in  Just ( constraints , State StateFinal mempty)
 
     _                                             -> Nothing
 
 {-# INLINABLE final #-}
 final :: GameDatum.GameDatum -> Bool
-final GameDatum.Finished = True
-final _                  = False
+final StateFinal = True
+final _          = False
 
 {-# INLINABLE check #-}
 check :: ByteString
@@ -94,7 +103,7 @@ check :: ByteString
       -> GameRedeemer.GameRedeemer
       -> ScriptContext
       -> Bool
-check rock paper scissors (GameDatum.GameDatum player1ChoiceHash (Just player2Choice)) (GameRedeemer.Player1RevealWin nonce player1Choice) _ =
+check rock paper scissors (State1 player1ChoiceHash player2Choice) (GameRedeemer.Player1RevealWin nonce player1Choice) _ =
     traceIfFalse "player1 should reveal the original choice"
     --traceIfFalse ("player1 should reveal the original choice: " ++ (map charToString player1ChoiceHash) ++ "actual: " ++ presentedPlayer1ChoiceHash)
         (player1ChoiceHash == presentedPlayer1ChoiceHash) &&
@@ -111,7 +120,7 @@ check rock paper scissors (GameDatum.GameDatum player1ChoiceHash (Just player2Ch
                 where
                     choiceHash = sha2_256 (nonce `concatenate` player1ChoiceString)
 
-check rock paper scissors (GameDatum.GameDatum player1ChoiceHash (Just player2Choice)) (GameRedeemer.Player1RevealDraw nonce player1Choice) _ =
+check rock paper scissors (State1 player1ChoiceHash player2Choice) (GameRedeemer.Player1RevealDraw nonce player1Choice) _ =
     player1ChoiceHash == presentedPlayer1ChoiceHash &&
     player1Choice == player2Choice
         where

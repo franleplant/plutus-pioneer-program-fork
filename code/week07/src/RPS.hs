@@ -34,6 +34,7 @@ import qualified Prelude
 import qualified RPS.Game as Game
 import qualified RPS.GameChoice as GameChoice
 import qualified RPS.GameDatum as GameDatum
+import           RPS.GameDatum               hiding (GameDatum)
 import qualified RPS.GameRedeemer as GameRedeemer
 import qualified RPS.Validator as Validator
 
@@ -74,7 +75,8 @@ firstGame params = do
         choice     = fpChoice params
         choiceBs   = GameChoice.toByteString choice
         choiceHash = sha2_256 $ nonce `concatenate` choiceBs
-    void $ mapError' $ runInitialise client (GameDatum.GameDatum choiceHash Nothing) stake
+
+    void $ mapError' $ runInitialise client (State0 choiceHash) stake
     logInfo @String $ "first: made first move: " ++ show (fpChoice params)
     tell $ Last $ Just threadToken
 
@@ -85,17 +87,17 @@ firstGame params = do
         Nothing             -> throwError "first: game output not found"
         Just ((o, _), _) -> case tyTxOutData o of
 
-            GameDatum.GameDatum _ Nothing -> do
+            State0 _ -> do
                 logInfo @String "first: player2 did not play"
                 void $ mapError' $ runStep client GameRedeemer.Player1NoPlayClaim
                 logInfo @String "first: player1 reclaimed stake"
 
-            GameDatum.GameDatum _ (Just player2Choice) | GameChoice.beats choice player2Choice -> do
+            State1 _ player2Choice | GameChoice.beats choice player2Choice -> do
                 logInfo @String "first: player2 played and lost"
                 void $ mapError' $ runStep client $ GameRedeemer.Player1RevealWin nonce choice
                 logInfo @String "first: player1 revealed and won"
 
-            GameDatum.GameDatum _ (Just player2Choice) | choice == player2Choice -> do
+            State1 _ player2Choice | choice == player2Choice -> do
                 logInfo @String "first: player2 played and it is a draw"
                 void $ mapError' $ runStep client $ GameRedeemer.Player1RevealDraw nonce choice
                 logInfo @String "first: player1 revealed a draw"
@@ -128,7 +130,7 @@ secondGame params = do
     case m of
         Nothing          -> logInfo @String "second: no running game found"
         Just ((o, _), _) -> case tyTxOutData o of
-            GameDatum.GameDatum _ Nothing -> do
+            State0 _ -> do
                 logInfo @String "second: running game found"
                 void $ mapError' $ runStep client $ GameRedeemer.Player2Play choice
                 logInfo @String $ "second: player2 played: " ++ show choice
@@ -137,11 +139,18 @@ secondGame params = do
 
                 m' <- mapError' $ getOnChainState client
                 case m' of
-                    Nothing -> logInfo @String "second: first player won or draw"
-                    Just _  -> do
-                        logInfo @String "second: player1 didn't reveal"
-                        void $ mapError' $ runStep client GameRedeemer.Player2NoRevealClaim
-                        logInfo @String "second: player2 won"
+                    Nothing -> logInfo @String "second: first player won draw"
+                    Just ((o, _), _) -> case tyTxOutData o of
+                        State1 _ _ -> do
+                            logInfo @String "second: player1 didn't reveal"
+                            void $ mapError' $ runStep client GameRedeemer.Player2NoRevealClaim
+                            logInfo @String "second: player2 won"
+                        State2 _ _ -> do 
+                            logInfo @String "second: player1 revealed a draw"
+                            void $ mapError' $ runStep client GameRedeemer.Player2ClaimDraw
+                            logInfo @String "second: draw"
+
+                        _ -> throwError "second: unexpected datum after play"
 
             _ -> throwError "second: unexpected datum"
 

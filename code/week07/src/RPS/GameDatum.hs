@@ -14,24 +14,28 @@
 module RPS.GameDatum where
 
 import           PlutusTx.Prelude             hiding (Semigroup(..), check, unless)
---import           Prelude                      (Semigroup (..), Show (..), String)
 import qualified Prelude
 import qualified PlutusTx
---import           Ledger                       hiding (singleton)
---import           Plutus.Contract.StateMachine
---import           Data.Aeson                   (FromJSON, ToJSON)
---import           GHC.Generics                 (Generic)
---import           Playground.Contract          (ToSchema)
 
 import qualified RPS.GameChoice as GameChoice
 
-data GameDatum = GameDatum ByteString (Maybe GameChoice.GameChoice) | Finished
+data GameDatum =
+      State0 ByteString
+    | State1 ByteString            GameChoice.GameChoice
+    | State2 GameChoice.GameChoice GameChoice.GameChoice
+    | StateFinal
     deriving Prelude.Show
 
 instance Eq GameDatum where
     {-# INLINABLE (==) #-}
-    GameDatum bs mc == GameDatum bs' mc' = (bs == bs') && (mc == mc')
-    Finished        == Finished          = True
+    State0 bs == State0 bs' =
+        bs == bs'
+    State1 bs player2Choice == State1 bs' player2Choice' =
+        bs == bs' && player2Choice == player2Choice'
+    State2 player1Choice player2Choice == State2 player1Choice' player2Choice' =
+        player1Choice == player1Choice' && player2Choice == player2Choice'
+
+    StateFinal == StateFinal = True
     _               == _                 = False
 
 PlutusTx.unstableMakeIsData ''GameDatum
